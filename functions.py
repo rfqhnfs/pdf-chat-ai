@@ -1,29 +1,28 @@
-from langchain_core.prompts import ChatPromptTemplate
 from langchain_google_genai import ChatGoogleGenerativeAI
 from langchain_community.document_loaders import PyPDFLoader
-from langchain_text_splitters import RecursiveCharacterTextSplitter
 import re
 import gc
 
 def process_pdf_from_file(file_path, api_key):
     """
-    Direct RAG without vector database - 100% reliable for Streamlit Cloud
+    Simple text-based RAG without any vector database
+    100% compatible with all Streamlit Cloud environments
     """
     try:
         # Load PDF
         loader = PyPDFLoader(file_path)
         documents = loader.load()
         
-        # Clean text
-        cleaned_text = ""
+        # Extract and clean all text
+        full_text = ""
         for doc in documents:
             clean_content = re.sub(r'[\n\xa0\s]+', ' ', doc.page_content).strip()
             clean_content = re.sub(r'\u200b', '', clean_content).strip()
-            cleaned_text += clean_content + " "
+            full_text += clean_content + " "
         
-        # Limit text length for memory efficiency
-        if len(cleaned_text) > 15000:
-            cleaned_text = cleaned_text[:15000]
+        # Limit text for memory efficiency (Streamlit Cloud limit)
+        if len(full_text) > 12000:
+            full_text = full_text[:12000]
         
         # Create LLM
         llm = ChatGoogleGenerativeAI(
@@ -33,36 +32,41 @@ def process_pdf_from_file(file_path, api_key):
             google_api_key=api_key
         )
         
-        # Create simple RAG function
-        def simple_rag(question):
+        # Simple RAG function
+        def answer_question(question):
             prompt = f"""
-            Based on the following document content, answer the question accurately and concisely.
-            
-            Document Content:
-            {cleaned_text}
-            
-            Question: {question}
-            
-            Answer based only on the document content above. If the information is not in the document, say "Information not found in the document."
-            """
+You are an AI assistant that answers questions based on document content.
+
+Document Content:
+{full_text}
+
+Question: {question}
+
+Instructions:
+- Answer based ONLY on the document content above
+- Be accurate and concise
+- If information is not in the document, say "Information not found in the document"
+- For insurance documents, look for RCV, ACV, depreciation amounts, claim details, etc.
+
+Answer:"""
             
             try:
                 response = llm.invoke(prompt)
                 return {"answer": response.content}
             except Exception as e:
-                return {"answer": f"Error processing question: {str(e)}"}
+                return {"answer": f"Error: {str(e)}"}
         
         # Clean up memory
         del documents
         gc.collect()
         
-        # Return function that mimics langchain invoke
-        class SimpleRAGChain:
+        # Return chain-like object
+        class TextRAGChain:
             def invoke(self, input_dict):
-                return simple_rag(input_dict["input"])
+                return answer_question(input_dict["input"])
         
-        return SimpleRAGChain()
+        return TextRAGChain()
         
     except Exception as e:
         gc.collect()
-        raise e
+        raise Exception(f"PDF processing failed: {str(e)}")
