@@ -18,9 +18,9 @@ st.set_page_config(
 # Get API key
 try:
     api_key_gemini = st.secrets["GEMINI_API"]
-except KeyError:
+except (KeyError, FileNotFoundError):
     st.error("🚨 GEMINI_API key not found in secrets.")
-    st.info("Add GEMINI_API in app settings → Secrets")
+    st.info("Please add GEMINI_API in app settings → Secrets")
     st.stop()
 
 # CSS
@@ -64,6 +64,11 @@ st.markdown("""
         border-left: 3px solid #28a745;
     }
     .block-container {padding-top: 1rem !important;}
+    .pdf-viewer {
+        border: 1px solid #ddd;
+        border-radius: 8px;
+        overflow: hidden;
+    }
 </style>
 """, unsafe_allow_html=True)
 
@@ -74,15 +79,35 @@ if 'rag_chain' not in ss:
     ss.rag_chain = None
 if 'auto_extraction_results' not in ss:
     ss.auto_extraction_results = None
+if 'pdf_data' not in ss:
+    ss.pdf_data = None
 
 # Memory cleanup
 def cleanup_memory():
     gc.collect()
 
-# File uploader
-uploaded_file = st.file_uploader("📁 Choose PDF", type=['pdf'], key='pdf_upload')
+# Check file size function
+def check_file_size(uploaded_file):
+    if uploaded_file is not None:
+        file_size_mb = len(uploaded_file.getbuffer()) / (1024 * 1024)  # Convert to MB
+        if file_size_mb > 5:
+            st.error(f"🚨 File too large: {file_size_mb:.1f}MB. Maximum allowed: 5MB")
+            st.info("💡 Try compressing your PDF or use a smaller file")
+            return False
+        else:
+            st.success(f"✅ File size: {file_size_mb:.1f}MB (within 5MB limit)")
+            return True
+    return False
 
-if uploaded_file is not None:
+# File uploader with size limit
+uploaded_file = st.file_uploader(
+    "📁 Choose PDF (Max: 5MB)", 
+    type=['pdf'], 
+    key='pdf_upload',
+    help="Upload a PDF file up to 5MB in size"
+)
+
+if uploaded_file is not None and check_file_size(uploaded_file):
     # Layout
     container_pdf, container_chat = st.columns([0.45, 0.55], gap='small')
     
@@ -98,7 +123,10 @@ if uploaded_file is not None:
                     # Process PDF
                     ss.rag_chain = functions.process_pdf_from_file("temp.pdf", api_key_gemini)
                     
-                    # Clean up file
+                    # Store PDF data for viewer
+                    ss.pdf_data = uploaded_file.getbuffer()
+                    
+                    # Clean up temp file
                     if os.path.exists("temp.pdf"):
                         os.remove("temp.pdf")
                         
@@ -112,21 +140,25 @@ if uploaded_file is not None:
         
         st.markdown('<p class="section-title">📄 PDF Document</p>', unsafe_allow_html=True)
         
-        # PDF viewer
-        try:
-            with open("temp.pdf", "wb") as f:
-                f.write(uploaded_file.getbuffer())
-            
-            with open("temp.pdf", "rb") as f:
-                base64_pdf = base64.b64encode(f.read()).decode('utf-8')
-                pdf_display = f'<embed src="data:application/pdf;base64,{base64_pdf}" width="100%" height="650" type="application/pdf">'
+        # **FIXED PDF VIEWER** - Use stored PDF data
+        if ss.pdf_data is not None:
+            try:
+                base64_pdf = base64.b64encode(ss.pdf_data).decode('utf-8')
+                pdf_display = f"""
+                <div class="pdf-viewer">
+                    <embed src="data:application/pdf;base64,{base64_pdf}" 
+                           width="100%" 
+                           height="650" 
+                           type="application/pdf">
+                </div>
+                """
                 st.markdown(pdf_display, unsafe_allow_html=True)
-            
-            # Clean up
-            if os.path.exists("temp.pdf"):
-                os.remove("temp.pdf")
-        except Exception as e:
-            st.error(f"Error displaying PDF: {str(e)}")
+            except Exception as e:
+                st.error(f"Error displaying PDF: {str(e)}")
+                # Fallback: Show file info
+                st.info(f"📄 PDF loaded: {uploaded_file.name} ({len(uploaded_file.getbuffer())/1024:.0f} KB)")
+        else:
+            st.info("PDF viewer will appear after processing")
         
     with container_chat:
         # Auto-extraction
@@ -288,24 +320,27 @@ Format your answer clearly with labels for each value."""
         # Clear memory button
         if st.button("🧹 Clear & Upload New PDF"):
             cleanup_memory()
-            for key in ['rag_chain', 'auto_extraction_results']:
+            for key in ['rag_chain', 'auto_extraction_results', 'pdf_data']:
                 if key in ss:
                     del ss[key]
             st.success("✅ Memory cleared! Upload a new PDF.")
             st.rerun()
 
-# Reset state when no file
-if uploaded_file is None:
+# Reset state when no file or file too large
+elif uploaded_file is None or not check_file_size(uploaded_file):
     if ss.auto_extraction_results is not None or ss.rag_chain is not None:
         ss.auto_extraction_results = None
         ss.rag_chain = None
+        ss.pdf_data = None
         cleanup_memory()
-    
-    # Welcome message
+
+# Welcome message for new users
+if uploaded_file is None:
     st.markdown("""
     <div style="text-align: center; padding: 1.5rem;">
         <h3>👋 Upload a PDF to get started</h3>
         <p>Automatically extract RCV, ACV, and depreciation amounts</p>
-        <p><small>⚡ Powered by Google Gemini • Optimized for Streamlit Cloud</small></p>
+        <p><strong>📏 Maximum file size: 5MB</strong></p>
+        <p><small>⚡ Powered by Google Gemini • Zero Dependencies</small></p>
     </div>
     """, unsafe_allow_html=True)
