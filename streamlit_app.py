@@ -23,7 +23,7 @@ except (KeyError, FileNotFoundError):
     st.info("Please add GEMINI_API in app settings → Secrets")
     st.stop()
 
-# CSS
+# Minimal CSS
 st.markdown("""
 <style>
     .main-header {
@@ -64,22 +64,6 @@ st.markdown("""
         border-left: 3px solid #28a745;
     }
     .block-container {padding-top: 1rem !important;}
-    .pdf-container {
-        border: 2px solid #e3f2fd;
-        border-radius: 8px;
-        padding: 1rem;
-        background-color: #f8f9fa;
-        text-align: center;
-    }
-    .download-button {
-        background-color: #1f77b4;
-        color: white;
-        padding: 0.5rem 1rem;
-        border-radius: 5px;
-        text-decoration: none;
-        display: inline-block;
-        margin: 0.5rem;
-    }
 </style>
 """, unsafe_allow_html=True)
 
@@ -92,8 +76,6 @@ if 'auto_extraction_results' not in ss:
     ss.auto_extraction_results = None
 if 'pdf_data' not in ss:
     ss.pdf_data = None
-if 'pdf_name' not in ss:
-    ss.pdf_name = None
 
 # Memory cleanup
 def cleanup_memory():
@@ -105,20 +87,14 @@ def check_file_size(uploaded_file):
         file_size_mb = len(uploaded_file.getbuffer()) / (1024 * 1024)
         if file_size_mb > 5:
             st.error(f"🚨 File too large: {file_size_mb:.1f}MB. Maximum allowed: 5MB")
-            st.info("💡 Try compressing your PDF or use a smaller file")
             return False
         else:
-            st.success(f"✅ File size: {file_size_mb:.1f}MB (within 5MB limit)")
+            st.success(f"✅ File size: {file_size_mb:.1f}MB")
             return True
     return False
 
 # File uploader
-uploaded_file = st.file_uploader(
-    "📁 Choose PDF (Max: 5MB)", 
-    type=['pdf'], 
-    key='pdf_upload',
-    help="Upload a PDF file up to 5MB in size"
-)
+uploaded_file = st.file_uploader("📁 Choose PDF (Max: 5MB)", type=['pdf'], key='pdf_upload')
 
 if uploaded_file is not None and check_file_size(uploaded_file):
     # Layout
@@ -129,119 +105,50 @@ if uploaded_file is not None and check_file_size(uploaded_file):
         if ss.rag_chain is None:
             with st.spinner("Processing PDF..."):
                 try:
-                    # Save file
+                    # Save and process file
                     with open("temp.pdf", "wb") as f:
                         f.write(uploaded_file.getbuffer())
             
-                    # Process PDF
                     ss.rag_chain = functions.process_pdf_from_file("temp.pdf", api_key_gemini)
-                    
-                    # Store PDF data and name
                     ss.pdf_data = uploaded_file.getbuffer()
-                    ss.pdf_name = uploaded_file.name
                     
-                    # Clean up temp file
                     if os.path.exists("temp.pdf"):
                         os.remove("temp.pdf")
                         
                     st.success("✅ PDF processed successfully!")
                         
                 except Exception as e:
-                    st.error(f"❌ Error processing PDF: {str(e)}")
+                    st.error(f"❌ Error: {str(e)}")
                     if os.path.exists("temp.pdf"):
                         os.remove("temp.pdf")
                     st.stop()
         
         st.markdown('<p class="section-title">📄 PDF Document</p>', unsafe_allow_html=True)
         
-        # **WORKING PDF VIEWER** - Multiple approaches for maximum compatibility
+        # **MINIMAL PDF VIEWER** - No extra boxes or download buttons
         if ss.pdf_data is not None:
             try:
-                # Method 1: Try iframe first (most compatible)
                 base64_pdf = base64.b64encode(ss.pdf_data).decode('utf-8')
-                
-                # Create download link
-                st.markdown(
-                    f'<div class="pdf-container">'
-                    f'<h4>📄 {ss.pdf_name}</h4>'
-                    f'<p>File size: {len(ss.pdf_data)/1024:.0f} KB</p>'
-                    f'<a href="data:application/pdf;base64,{base64_pdf}" download="{ss.pdf_name}" class="download-button">'
-                    f'📥 Download PDF</a>'
-                    f'</div>',
-                    unsafe_allow_html=True
-                )
-                
-                # Try different PDF viewer methods
-                pdf_viewer_success = False
-                
-                # Method 1: iframe (most compatible)
+                st.markdown(f"""
+                <iframe 
+                    src="data:application/pdf;base64,{base64_pdf}" 
+                    width="100%" 
+                    height="650" 
+                    style="border: 1px solid #ddd; border-radius: 8px;">
+                </iframe>
+                """, unsafe_allow_html=True)
+            except:
                 try:
                     st.markdown(f"""
-                    <iframe 
+                    <embed 
                         src="data:application/pdf;base64,{base64_pdf}" 
                         width="100%" 
                         height="650" 
-                        style="border: 1px solid #ccc; border-radius: 8px;">
-                    </iframe>
+                        type="application/pdf"
+                        style="border: 1px solid #ddd; border-radius: 8px;">
                     """, unsafe_allow_html=True)
-                    pdf_viewer_success = True
                 except:
-                    pass
-                
-                # Method 2: embed fallback
-                if not pdf_viewer_success:
-                    try:
-                        st.markdown(f"""
-                        <embed 
-                            src="data:application/pdf;base64,{base64_pdf}" 
-                            width="100%" 
-                            height="650" 
-                            type="application/pdf"
-                            style="border: 1px solid #ccc; border-radius: 8px;">
-                        """, unsafe_allow_html=True)
-                        pdf_viewer_success = True
-                    except:
-                        pass
-                
-                # Method 3: object fallback
-                if not pdf_viewer_success:
-                    try:
-                        st.markdown(f"""
-                        <object 
-                            data="data:application/pdf;base64,{base64_pdf}" 
-                            width="100%" 
-                            height="650" 
-                            type="application/pdf">
-                            <p>PDF cannot be displayed. <a href="data:application/pdf;base64,{base64_pdf}" download="{ss.pdf_name}">Download instead</a></p>
-                        </object>
-                        """, unsafe_allow_html=True)
-                        pdf_viewer_success = True
-                    except:
-                        pass
-                
-                # Method 4: Streamlit native (last resort)
-                if not pdf_viewer_success:
-                    st.info("🔍 PDF viewer not available in this browser")
-                    st.markdown(f"**File:** {ss.pdf_name}")
-                    st.markdown(f"**Size:** {len(ss.pdf_data)/1024:.0f} KB")
-                    st.download_button(
-                        label="📥 Download PDF",
-                        data=ss.pdf_data,
-                        file_name=ss.pdf_name,
-                        mime="application/pdf"
-                    )
-                
-            except Exception as e:
-                # Final fallback
-                st.error("PDF viewer error - showing file info instead:")
-                st.info(f"📄 File: {ss.pdf_name if ss.pdf_name else uploaded_file.name}")
-                st.info(f"📊 Size: {len(uploaded_file.getbuffer())/1024:.0f} KB")
-                st.download_button(
-                    label="📥 Download PDF",
-                    data=uploaded_file.getbuffer(),
-                    file_name=uploaded_file.name,
-                    mime="application/pdf"
-                )
+                    st.info("📄 PDF ready for analysis")
         
     with container_chat:
         # Auto-extraction
@@ -285,7 +192,6 @@ Format your answer clearly with labels for each value."""
                         elif 'depreciation' in line_lower:
                             dep_answer = clean_line
                     
-                    # Fallback if parsing fails
                     if rcv_answer == "Not found" and acv_answer == "Not found":
                         cleaned_full = clean_text(combined_answer)
                         rcv_answer = acv_answer = dep_answer = cleaned_full[:200] + "..."
@@ -297,7 +203,6 @@ Format your answer clearly with labels for each value."""
                     ]
                     
                 except Exception as e:
-                    st.error(f"Error in auto-extraction: {str(e)}")
                     ss.auto_extraction_results = [
                         ("💰 RCV", "Extraction failed", "#e3f2fd"),
                         ("💵 ACV", "Extraction failed", "#f3e5f5"),
@@ -320,16 +225,10 @@ Format your answer clearly with labels for each value."""
         st.markdown('<p class="section-title">💬 Ask Questions</p>', unsafe_allow_html=True)
         
         if ss.rag_chain is not None:
-            # Form for Enter key support
             with st.form(key="question_form", clear_on_submit=True):
-                user_message = st.text_input(
-                    "Question:", 
-                    placeholder="Ask anything...", 
-                    label_visibility="collapsed"
-                )
+                user_message = st.text_input("Question:", placeholder="Ask anything...", label_visibility="collapsed")
                 ask_button = st.form_submit_button("🚀 Ask", type="primary")
             
-            # Process question
             if ask_button and user_message.strip():
                 with st.spinner("Thinking..."):
                     try:
@@ -350,23 +249,19 @@ Format your answer clearly with labels for each value."""
                         </div>
                         """, unsafe_allow_html=True)
                         
-                        # Token count
                         try:
                             tc = TokenCount()
                             tokens = tc.num_tokens_from_string(str(result))
                             st.caption(f"📊 ~{tokens} tokens")
                         except:
-                            st.caption("📊 Token count unavailable")
+                            pass
                         
                     except Exception as e:
-                        st.error(f"❌ Error processing question: {str(e)}")
+                        st.error(f"❌ Error: {str(e)}")
             
             # Quick questions
             st.markdown("**Quick Questions:**")
-            quick_questions = [
-                "Total claim?", "Policyholder?", 
-                "Damage type?", "When occurred?"
-            ]
+            quick_questions = ["Total claim?", "Policyholder?", "Damage type?", "When occurred?"]
             
             quick_cols = st.columns(2)
             for i, quick_q in enumerate(quick_questions):
@@ -403,28 +298,24 @@ Format your answer clearly with labels for each value."""
         # Clear memory button
         if st.button("🧹 Clear & Upload New PDF"):
             cleanup_memory()
-            for key in ['rag_chain', 'auto_extraction_results', 'pdf_data', 'pdf_name']:
+            for key in ['rag_chain', 'auto_extraction_results', 'pdf_data']:
                 if key in ss:
                     del ss[key]
-            st.success("✅ Memory cleared! Upload a new PDF.")
+            st.success("✅ Memory cleared!")
             st.rerun()
 
-# Reset state when no file or file too large
-elif uploaded_file is None or not check_file_size(uploaded_file):
-    if ss.auto_extraction_results is not None or ss.rag_chain is not None:
-        ss.auto_extraction_results = None
+# Reset state
+elif uploaded_file is None:
+    if ss.rag_chain is not None:
         ss.rag_chain = None
+        ss.auto_extraction_results = None
         ss.pdf_data = None
-        ss.pdf_name = None
         cleanup_memory()
-
-# Welcome message
-if uploaded_file is None:
+    
     st.markdown("""
     <div style="text-align: center; padding: 1.5rem;">
         <h3>👋 Upload a PDF to get started</h3>
         <p>Automatically extract RCV, ACV, and depreciation amounts</p>
         <p><strong>📏 Maximum file size: 5MB</strong></p>
-        <p><small>⚡ Powered by Google Gemini • Zero Dependencies</small></p>
     </div>
     """, unsafe_allow_html=True)
