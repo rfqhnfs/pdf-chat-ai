@@ -1,71 +1,68 @@
-from langchain_google_genai import ChatGoogleGenerativeAI
-from langchain_community.document_loaders import PyPDFLoader
+import google.generativeai as genai
+import PyPDF2
 import re
 import gc
+import io
 
 def process_pdf_from_file(file_path, api_key):
     """
-    Simple text-based RAG without any vector database
-    100% compatible with all Streamlit Cloud environments
+    Pure Python PDF processing - no LangChain dependencies
+    100% compatible with Streamlit Cloud
     """
     try:
-        # Load PDF
-        loader = PyPDFLoader(file_path)
-        documents = loader.load()
+        # Configure Gemini
+        genai.configure(api_key=api_key)
+        model = genai.GenerativeModel('gemini-1.5-flash-latest')
         
-        # Extract and clean all text
-        full_text = ""
-        for doc in documents:
-            clean_content = re.sub(r'[\n\xa0\s]+', ' ', doc.page_content).strip()
-            clean_content = re.sub(r'\u200b', '', clean_content).strip()
-            full_text += clean_content + " "
+        # Extract text from PDF using PyPDF2
+        pdf_text = ""
+        with open(file_path, 'rb') as file:
+            pdf_reader = PyPDF2.PdfReader(file)
+            for page in pdf_reader.pages:
+                page_text = page.extract_text()
+                if page_text:
+                    pdf_text += page_text + " "
         
-        # Limit text for memory efficiency (Streamlit Cloud limit)
-        if len(full_text) > 12000:
-            full_text = full_text[:12000]
+        # Clean text
+        pdf_text = re.sub(r'[\n\xa0\s]+', ' ', pdf_text).strip()
+        pdf_text = re.sub(r'\u200b', '', pdf_text).strip()
         
-        # Create LLM
-        llm = ChatGoogleGenerativeAI(
-            model="gemini-1.5-flash-latest",
-            temperature=0,
-            max_tokens=300,
-            google_api_key=api_key
-        )
+        # Limit text for memory efficiency
+        if len(pdf_text) > 15000:
+            pdf_text = pdf_text[:15000]
         
-        # Simple RAG function
         def answer_question(question):
             prompt = f"""
 You are an AI assistant that answers questions based on document content.
 
 Document Content:
-{full_text}
+{pdf_text}
 
 Question: {question}
 
 Instructions:
 - Answer based ONLY on the document content above
-- Be accurate and concise
+- Be accurate and concise  
 - If information is not in the document, say "Information not found in the document"
 - For insurance documents, look for RCV, ACV, depreciation amounts, claim details, etc.
 
 Answer:"""
             
             try:
-                response = llm.invoke(prompt)
-                return {"answer": response.content}
+                response = model.generate_content(prompt)
+                return {"answer": response.text}
             except Exception as e:
-                return {"answer": f"Error: {str(e)}"}
+                return {"answer": f"Error generating response: {str(e)}"}
         
         # Clean up memory
-        del documents
         gc.collect()
         
         # Return chain-like object
-        class TextRAGChain:
+        class PurePythonRAG:
             def invoke(self, input_dict):
                 return answer_question(input_dict["input"])
         
-        return TextRAGChain()
+        return PurePythonRAG()
         
     except Exception as e:
         gc.collect()
