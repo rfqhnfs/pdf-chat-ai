@@ -23,29 +23,83 @@ except (KeyError, FileNotFoundError):
     st.info("Please add GEMINI_API in app settings → Secrets")
     st.stop()
 
-# INSURANCE GLOSSARY INTEGRATION
+# DEBUGGING INSURANCE GLOSSARY INTEGRATION
 @st.cache_resource
 def load_insurance_glossary():
-    """Load and cache your insurance terms glossary PDF"""
-    glossary_path = "insurance_glossary.pdf"  # ← Your glossary PDF goes here
+    """Load and cache your insurance terms glossary PDF with detailed debugging"""
     
-    if not os.path.exists(glossary_path):
-        st.warning(f"⚠️ Insurance glossary not found: {glossary_path}")
-        st.info("Add your insurance terms glossary as 'insurance_glossary.pdf' for enhanced explanations")
+    # Show current working directory
+    current_dir = os.getcwd()
+    st.write(f"🔍 **Debug Info**: Current working directory: `{current_dir}`")
+    
+    # List all files in current directory
+    try:
+        files_in_dir = os.listdir(current_dir)
+        st.write(f"📁 **Files in current directory**: {files_in_dir}")
+    except Exception as e:
+        st.error(f"Error listing directory: {e}")
+    
+    # Check for different possible filenames
+    possible_names = [
+        "insurance_glossary.pdf",
+        "glossary.pdf", 
+        "terms.pdf",
+        "knowledge_base.pdf",
+        "Insurance_Glossary.pdf"
+    ]
+    
+    found_files = []
+    for filename in possible_names:
+        if os.path.exists(filename):
+            found_files.append(filename)
+            file_size = os.path.getsize(filename)
+            st.success(f"✅ **Found**: `{filename}` (Size: {file_size} bytes)")
+    
+    if not found_files:
+        st.error("❌ **No glossary PDF found!**")
+        st.write("**Expected filename**: `insurance_glossary.pdf`")
+        st.write("**Make sure your PDF file is:**")
+        st.write("1. Named exactly: `insurance_glossary.pdf`")
+        st.write("2. Located in the same folder as your app.py")
+        st.write("3. Actually a valid PDF file")
         return []
+    
+    # Try to load the first found file
+    glossary_path = found_files[0]
+    st.info(f"🔄 **Attempting to load**: `{glossary_path}`")
     
     try:
-        # Extract the glossary chunks for definitions
+        # Test basic file reading first
+        with open(glossary_path, 'rb') as f:
+            content_preview = f.read(100)
+            st.success(f"✅ **File readable**: First 100 bytes loaded successfully")
+        
+        # Now try PDF processing
         glossary_chunks = functions.get_insurance_glossary_chunks(glossary_path)
         
-        st.success(f"✅ Insurance glossary loaded: {len(glossary_chunks)} term definitions available")
-        return glossary_chunks
-    
+        if glossary_chunks:
+            st.success(f"✅ **PDF processed successfully**: {len(glossary_chunks)} term definitions loaded")
+            
+            # Show sample content from first chunk
+            if len(glossary_chunks) > 0:
+                sample_content = glossary_chunks[0].page_content[:200] + "..."
+                st.write(f"📄 **Sample content**: {sample_content}")
+            
+            return glossary_chunks
+        else:
+            st.warning("⚠️ **PDF loaded but no chunks created** - PDF might be empty or unreadable")
+            return []
+            
+    except FileNotFoundError:
+        st.error(f"❌ **File not found**: {glossary_path}")
+        return []
     except Exception as e:
-        st.error(f"❌ Error loading insurance glossary: {str(e)}")
+        st.error(f"❌ **Error processing PDF**: {str(e)}")
+        st.write(f"**Error type**: {type(e).__name__}")
         return []
 
-# Load insurance glossary once (cached)
+# Load insurance glossary with debugging
+st.markdown("## 🔧 System Debugging")
 glossary_chunks = load_insurance_glossary()
 
 # Enhanced CSS
@@ -107,6 +161,7 @@ st.markdown("""
 </style>
 """, unsafe_allow_html=True)
 
+st.markdown("---")
 st.markdown("<h1 class='main-header'>📄 Insurance Claims AI Assistant</h1>", unsafe_allow_html=True)
 
 # Show glossary status
