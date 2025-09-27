@@ -4,67 +4,12 @@ import re
 import gc
 import os
 
-def get_available_models(api_key):
-    """Get list of available models for this API key"""
-    try:
-        genai.configure(api_key=api_key)
-        available_models = []
-        
-        print("[DEBUG] Checking available models...")
-        for model in genai.list_models():
-            model_name = model.name
-            print(f"[DEBUG] Found model: {model_name}")
-            if 'generateContent' in getattr(model, 'supported_generation_methods', []):
-                available_models.append(model_name)
-                print(f"[DEBUG] ✅ Model {model_name} supports generateContent")
-            else:
-                print(f"[DEBUG] ❌ Model {model_name} does not support generateContent")
-        
-        print(f"[SUCCESS] Available models with generateContent: {available_models}")
-        return available_models
-    except Exception as e:
-        print(f"[ERROR] Failed to list models: {str(e)}")
-        return []
-
-def get_working_model(api_key):
-    """Find the first working model"""
-    try:
-        available_models = get_available_models(api_key)
-        
-        if not available_models:
-            print("[ERROR] No models found!")
-            return None
-        
-        # Try each available model
-        for model_name in available_models:
-            try:
-                model = genai.GenerativeModel(model_name)
-                # Test with simple prompt
-                test_response = model.generate_content("Hello")
-                print(f"[SUCCESS] Working model found: {model_name}")
-                return model, model_name
-            except Exception as e:
-                print(f"[DEBUG] Model {model_name} test failed: {str(e)}")
-                continue
-        
-        print("[ERROR] No working model found!")
-        return None, None
-        
-    except Exception as e:
-        print(f"[ERROR] Error finding working model: {str(e)}")
-        return None, None
-
 def process_pdf_from_file(file_path, api_key):
-    """
-    Process PDF with automatic model detection
-    """
+    """Process PDF using the best available model"""
     try:
-        # Configure and find working model
+        # Configure Gemini with the best model from your list
         genai.configure(api_key=api_key)
-        model, model_name = get_working_model(api_key)
-        
-        if not model:
-            raise Exception("No working model found for your API key")
+        model = genai.GenerativeModel('models/gemini-2.5-flash')  # Using the latest stable model
         
         # Extract text from PDF using PyPDF2
         pdf_text = ""
@@ -83,7 +28,7 @@ def process_pdf_from_file(file_path, api_key):
         if len(pdf_text) > 12000:
             pdf_text = pdf_text[:12000]
         
-        print(f"[DEBUG] Using model: {model_name} | PDF text length: {len(pdf_text)}")
+        print(f"[SUCCESS] Using model: models/gemini-2.5-flash | PDF text length: {len(pdf_text)}")
         
         def answer_question(question):
             prompt = f"""You are an AI assistant that answers questions based on document content.
@@ -107,31 +52,27 @@ Answer:"""
             except Exception as e:
                 return {"answer": f"Error generating response: {str(e)}"}
         
-        # Clean up memory
         gc.collect()
         
-        # Return chain-like object
-        class AutoDetectedRAG:
+        class FastRAG:
             def invoke(self, input_dict):
                 return answer_question(input_dict["input"])
         
-        return AutoDetectedRAG()
+        return FastRAG()
         
     except Exception as e:
         gc.collect()
         raise Exception(f"PDF processing failed: {str(e)}")
 
 def extract_glossary_text(glossary_path):
-    """Extract text from insurance glossary PDF using PyPDF2"""
+    """Extract text from insurance glossary PDF"""
     try:
         print(f"[DEBUG] Extracting glossary text: {glossary_path}")
         
-        # Check if file exists
         if not os.path.exists(glossary_path):
             print(f"[ERROR] File does not exist: {glossary_path}")
             return None
         
-        # Extract text from PDF using PyPDF2
         glossary_text = ""
         with open(glossary_path, 'rb') as file:
             pdf_reader = PyPDF2.PdfReader(file)
@@ -147,7 +88,6 @@ def extract_glossary_text(glossary_path):
             print("[ERROR] No text extracted from PDF")
             return None
         
-        # Clean text
         glossary_text = re.sub(r'[\n\xa0\s]+', ' ', glossary_text).strip()
         glossary_text = re.sub(r'\u200b', '', glossary_text).strip()
         
@@ -156,23 +96,18 @@ def extract_glossary_text(glossary_path):
         
     except Exception as e:
         print(f"[ERROR] Exception in extract_glossary_text: {str(e)}")
-        import traceback
-        print(f"[ERROR] Full traceback: {traceback.format_exc()}")
         return None
 
 def create_expert_claim_system(user_pdf_path, glossary_text, api_key):
-    """Create expert system with automatic model detection"""
+    """Create expert system using the best model"""
     try:
-        print(f"[DEBUG] Creating expert claim system with auto-detection")
+        print(f"[SUCCESS] Creating expert claim system with models/gemini-2.5-flash")
         
-        # Configure and find working model
+        # Configure with best model
         genai.configure(api_key=api_key)
-        model, model_name = get_working_model(api_key)
+        model = genai.GenerativeModel('models/gemini-2.5-flash')
         
-        if not model:
-            raise Exception("No working model found for expert system")
-        
-        # Extract text from user's claim document using PyPDF2
+        # Extract user text
         user_text = ""
         with open(user_pdf_path, 'rb') as file:
             pdf_reader = PyPDF2.PdfReader(file)
@@ -181,24 +116,19 @@ def create_expert_claim_system(user_pdf_path, glossary_text, api_key):
                 if page_text:
                     user_text += page_text + " "
         
-        # Clean user text
+        # Clean and limit text
         user_text = re.sub(r'[\n\xa0\s]+', ' ', user_text).strip()
         user_text = re.sub(r'\u200b', '', user_text).strip()
         
-        # Limit text for memory efficiency
         if len(user_text) > 10000:
             user_text = user_text[:10000]
         
-        # Limit glossary text
         if len(glossary_text) > 5000:
             glossary_text = glossary_text[:5000]
         
-        print(f"[DEBUG] Expert system using model: {model_name}")
-        print(f"[DEBUG] Content - User claim: {len(user_text)} chars, Glossary: {len(glossary_text)} chars")
+        print(f"[SUCCESS] Expert system ready - User claim: {len(user_text)} chars, Glossary: {len(glossary_text)} chars")
         
         def expert_answer(question):
-            """Provide expert answers using both user document and glossary"""
-            
             prompt = f"""You are an expert insurance advisor helping customers understand their insurance claims.
 
 USER'S INSURANCE CLAIM DOCUMENT:
@@ -231,15 +161,13 @@ Expert Answer:"""
             except Exception as e:
                 return {"answer": f"Error generating expert response: {str(e)}"}
         
-        # Return expert system
-        class AutoDetectedExpertRAG:
+        class ExpertRAG:
             def invoke(self, input_dict):
                 return expert_answer(input_dict["input"])
         
-        gc.collect()  # Clean up memory
-        return AutoDetectedExpertRAG()
+        gc.collect()
+        return ExpertRAG()
         
     except Exception as e:
         print(f"[ERROR] Error in create_expert_claim_system: {str(e)}")
-        # Fallback to regular processing
         return process_pdf_from_file(user_pdf_path, api_key)
