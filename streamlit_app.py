@@ -23,10 +23,10 @@ except (KeyError, FileNotFoundError):
     st.info("Please add GEMINI_API in app settings → Secrets")
     st.stop()
 
-# INTELLIGENT VECTOR-BASED GLOSSARY INTEGRATION
+# SMART GLOSSARY INTEGRATION (No external dependencies)
 @st.cache_resource
-def load_insurance_glossary_vector():
-    """Load and create vector embeddings from insurance glossary PDF"""
+def load_insurance_glossary_smart():
+    """Load and process insurance glossary using pure Python"""
     
     # Show current working directory for debugging
     current_dir = os.getcwd()
@@ -39,51 +39,35 @@ def load_insurance_glossary_vector():
     except Exception as e:
         st.error(f"Error listing directory: {e}")
     
-    # Check for different possible filenames
-    possible_names = [
-        "insurance_glossary.pdf",
-        "glossary.pdf", 
-        "terms.pdf",
-        "knowledge_base.pdf",
-        "Insurance_Glossary.pdf"
-    ]
+    # Check for glossary file
+    glossary_path = "insurance_glossary.pdf"
     
-    found_files = []
-    for filename in possible_names:
-        if os.path.exists(filename):
-            found_files.append(filename)
-            file_size = os.path.getsize(filename)
-            st.success(f"✅ **Found**: `{filename}` (Size: {file_size} bytes)")
-    
-    if not found_files:
+    if not os.path.exists(glossary_path):
         st.error("❌ **No glossary PDF found!**")
         st.write("**Expected filename**: `insurance_glossary.pdf`")
-        st.write("**Make sure your PDF file is in the same folder as your app**")
         return None
     
-    # Try to create vector embeddings from the first found file
-    glossary_path = found_files[0]
-    st.info(f"🔄 **Creating vector embeddings from**: `{glossary_path}`")
+    file_size = os.path.getsize(glossary_path)
+    st.success(f"✅ **Found**: `{glossary_path}` (Size: {file_size} bytes)")
     
     try:
-        # Create vector store from glossary
-        glossary_vector_store = functions.create_glossary_vector_store(glossary_path, api_key_gemini)
+        # Process glossary using pure Python
+        glossary_text = functions.extract_glossary_text(glossary_path)
         
-        if glossary_vector_store:
-            st.success(f"✅ **Vector embeddings created successfully** from `{glossary_path}`")
-            return glossary_vector_store
+        if glossary_text:
+            st.success(f"✅ **Glossary processed successfully** - {len(glossary_text)} characters extracted")
+            return glossary_text
         else:
-            st.warning("⚠️ **Failed to create vector embeddings** - PDF might be unreadable")
+            st.warning("⚠️ **Failed to extract glossary text**")
             return None
             
     except Exception as e:
-        st.error(f"❌ **Error creating vector embeddings**: {str(e)}")
-        st.write(f"**Error type**: {type(e).__name__}")
+        st.error(f"❌ **Error processing glossary**: {str(e)}")
         return None
 
-# Load insurance glossary vector store with debugging
-st.markdown("## 🔧 Vector System Initialization")
-glossary_vector_store = load_insurance_glossary_vector()
+# Load insurance glossary
+st.markdown("## 🔧 Smart System Initialization")
+glossary_text = load_insurance_glossary_smart()
 
 # Enhanced CSS
 st.markdown("""
@@ -126,7 +110,7 @@ st.markdown("""
         border-left: 3px solid #28a745;
     }
     .block-container {padding-top: 1rem !important;}
-    .vector-indicator {
+    .smart-indicator {
         background: linear-gradient(145deg, #e8f5e8, #d4edda);
         border-left: 4px solid #28a745;
         padding: 0.8rem;
@@ -147,11 +131,11 @@ st.markdown("""
 st.markdown("---")
 st.markdown("<h1 class='main-header'>📄 Insurance Claims AI Assistant</h1>", unsafe_allow_html=True)
 
-# Show vector system status
-if glossary_vector_store:
+# Show smart system status
+if glossary_text:
     st.markdown(f"""
-    <div class="vector-indicator">
-        🧠 **Intelligent Vector System Active** - AI will search both your claim document and insurance glossary to find the most relevant information for each question
+    <div class="smart-indicator">
+        🧠 **Smart Expert System Active** - AI will intelligently combine your claim document with insurance glossary definitions
     </div>
     """, unsafe_allow_html=True)
 
@@ -187,22 +171,22 @@ if uploaded_file is not None and check_file_size(uploaded_file):
     container_pdf, container_chat = st.columns([0.45, 0.55], gap='small')
     
     with container_pdf:
-        # Process PDF with Intelligent Vector System
+        # Process PDF with Smart Expert System
         if ss.rag_chain is None:
-            with st.spinner("Creating intelligent vector system from your claim..."):
+            with st.spinner("Creating smart expert system from your claim..."):
                 try:
                     # Save and process file
                     with open("temp.pdf", "wb") as f:
                         f.write(uploaded_file.getbuffer())
             
-                    # ENHANCED: Create intelligent vector-based system
-                    if glossary_vector_store:
-                        ss.rag_chain = functions.create_intelligent_claim_system(
+                    # Create smart system
+                    if glossary_text:
+                        ss.rag_chain = functions.create_smart_claim_system(
                             "temp.pdf", 
-                            glossary_vector_store, 
+                            glossary_text, 
                             api_key_gemini
                         )
-                        success_msg = "✅ Intelligent vector system created! AI can now search both documents smartly."
+                        success_msg = "✅ Smart expert system created! AI can now provide detailed explanations."
                     else:
                         # Fallback to original processing
                         ss.rag_chain = functions.process_pdf_from_file("temp.pdf", api_key_gemini)
@@ -249,11 +233,11 @@ if uploaded_file is not None and check_file_size(uploaded_file):
                     st.info("📄 Claim document ready for analysis")
         
     with container_chat:
-        # Auto-extraction with intelligent vector retrieval
+        # Auto-extraction with smart processing
         st.markdown('<p class="section-title">🔍 Key Information Extraction</p>', unsafe_allow_html=True)
         
         if ss.auto_extraction_results is None and ss.rag_chain is not None:
-            # Enhanced extraction question for vector system
+            # Enhanced extraction question
             extraction_question = """Please extract and explain the following information from this insurance claim:
 
 1. RCV (Replacement Cost Value) - What is the RCV amount and what does RCV mean?
@@ -262,7 +246,7 @@ if uploaded_file is not None and check_file_size(uploaded_file):
 
 For each item, provide both the specific amount from the document AND a clear explanation of what the term means."""
             
-            with st.spinner("Using intelligent vector search to extract and explain key information..."):
+            with st.spinner("Using smart system to extract and explain key information..."):
                 try:
                     result = ss.rag_chain.invoke({"input": extraction_question})
                     combined_answer = result['answer']
@@ -275,7 +259,7 @@ For each item, provide both the specific amount from the document AND a clear ex
                         text = re.sub(r'\s+', ' ', text)
                         return text.strip()
                     
-                    # Enhanced parsing for vector-based explanations
+                    # Enhanced parsing
                     lines = combined_answer.split('\n')
                     rcv_answer = "Not found in document"
                     acv_answer = "Not found in document" 
@@ -293,7 +277,6 @@ For each item, provide both the specific amount from the document AND a clear ex
                         
                         if 'rcv' in line_lower or 'replacement cost' in line_lower:
                             if temp_content and current_section:
-                                # Save previous section
                                 content = ' '.join(temp_content)
                                 if 'rcv' in current_section:
                                     rcv_answer = content
@@ -350,12 +333,12 @@ For each item, provide both the specific amount from the document AND a clear ex
                     
                 except Exception as e:
                     ss.auto_extraction_results = [
-                        ("💰 RCV", "Vector extraction failed - try asking specific questions", "#e3f2fd"),
-                        ("💵 ACV", "Vector extraction failed - try asking specific questions", "#f3e5f5"),
-                        ("📉 Depreciation", "Vector extraction failed - try asking specific questions", "#fff3e0")
+                        ("💰 RCV", "Smart extraction failed - try asking specific questions", "#e3f2fd"),
+                        ("💵 ACV", "Smart extraction failed - try asking specific questions", "#f3e5f5"),
+                        ("📉 Depreciation", "Smart extraction failed - try asking specific questions", "#fff3e0")
                     ]
         
-        # Display enhanced results
+        # Display results
         if ss.auto_extraction_results:
             for i, (label, answer, bg_color) in enumerate(ss.auto_extraction_results):
                 st.markdown(f"""
@@ -365,11 +348,11 @@ For each item, provide both the specific amount from the document AND a clear ex
                 </div>
                 """, unsafe_allow_html=True)
         
-        # Q&A section with intelligent vector system
+        # Q&A section with smart system
         st.markdown('<p class="section-title">💬 Ask Your Insurance Questions</p>', unsafe_allow_html=True)
         
-        if glossary_vector_store:
-            st.info("🧠 **Intelligent Vector Mode**: AI searches both your claim and glossary to find the most relevant information for each question!")
+        if glossary_text:
+            st.info("🧠 **Smart Expert Mode**: AI has access to comprehensive insurance terminology definitions!")
         
         if ss.rag_chain is not None:
             with st.form(key="question_form", clear_on_submit=True):
@@ -377,7 +360,7 @@ For each item, provide both the specific amount from the document AND a clear ex
                 ask_button = st.form_submit_button("🚀 Ask Expert", type="primary")
             
             if ask_button and user_message.strip():
-                with st.spinner("Using intelligent vector search to find the best answer..."):
+                with st.spinner("Smart expert system analyzing your question..."):
                     try:
                         result = ss.rag_chain.invoke({"input": user_message})
                         
@@ -389,16 +372,16 @@ For each item, provide both the specific amount from the document AND a clear ex
                         
                         cleaned_answer = clean_answer(result['answer'])
                         
-                        st.markdown("**Intelligent Vector Answer:**")
+                        st.markdown("**Smart Expert Answer:**")
                         st.markdown(f"""
                         <div class="expert-answer">
                             {cleaned_answer}
                         </div>
                         """, unsafe_allow_html=True)
                         
-                        # Show intelligent system indicator
-                        if glossary_vector_store:
-                            st.caption("🧠 Answer generated using intelligent vector search across both documents")
+                        # Show smart system indicator
+                        if glossary_text:
+                            st.caption("🧠 Answer enhanced with insurance terminology expertise")
                         
                         try:
                             tc = TokenCount()
@@ -410,8 +393,8 @@ For each item, provide both the specific amount from the document AND a clear ex
                     except Exception as e:
                         st.error(f"❌ Error: {str(e)}")
             
-            # Enhanced quick questions for vector system
-            st.markdown("**Smart Insurance Questions:**")
+            # Enhanced quick questions
+            st.markdown("**Common Insurance Questions:**")
             quick_questions = ["What's my ACV?", "What's my RCV?", "How much depreciation?", "What's my deductible?"]
             
             quick_cols = st.columns(2)
@@ -425,7 +408,7 @@ For each item, provide both the specific amount from the document AND a clear ex
                             "What is my deductible amount and what does deductible mean in insurance?"
                         ]
                         
-                        with st.spinner("Vector search in progress..."):
+                        with st.spinner("Smart analysis in progress..."):
                             try:
                                 result = ss.rag_chain.invoke({"input": full_questions[i]})
                                 
@@ -466,8 +449,8 @@ elif uploaded_file is None:
     st.markdown("""
     <div style="text-align: center; padding: 1.5rem;">
         <h3>👋 Upload Your Insurance Claim Document</h3>
-        <p>The AI will intelligently search both your claim and our insurance glossary</p>
+        <p>Get expert explanations combining your claim with insurance terminology</p>
         <p><strong>📏 Maximum file size: 5MB</strong></p>
-        <p style="font-size: 0.9rem; color: #666;">🧠 Powered by intelligent vector search for precise answers</p>
+        <p style="font-size: 0.9rem; color: #666;">🧠 Powered by smart expert system</p>
     </div>
     """, unsafe_allow_html=True)
