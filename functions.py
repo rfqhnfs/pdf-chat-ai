@@ -13,7 +13,7 @@ def process_pdf_from_file(file_path, api_key):
     try:
         # Configure Gemini
         genai.configure(api_key=api_key)
-        model = genai.GenerativeModel('gemini-1.5-flash-latest')
+        model = genai.GenerativeModel('gemini-1.5-flash')
         
         # Extract text from PDF using PyPDF2
         pdf_text = ""
@@ -115,7 +115,7 @@ def create_smart_claim_system(user_pdf_path, glossary_text, api_key):
         
         # Configure Gemini
         genai.configure(api_key=api_key)
-        model = genai.GenerativeModel('gemini-1.5-flash-latest')
+        model = genai.GenerativeModel('gemini-1.5-flash')
         
         # Extract text from user's claim document using PyPDF2
         user_text = ""
@@ -188,3 +188,4 @@ Smart Expert Answer:"""
         print(f"[ERROR] Error in create_smart_claim_system: {str(e)}")
         # Fallback to regular processing
         return process_pdf_from_file(user_pdf_path, api_key)
+
