@@ -226,3 +226,71 @@ def process_claim_with_glossary(user_pdf_path, glossary_chunks, api_key):
         print(f"Error in process_claim_with_glossary: {str(e)}")
         # Fallback to regular processing
         return process_pdf_from_file(user_pdf_path, api_key)
+
+
+def get_insurance_glossary_chunks(glossary_path):
+    """Extract insurance term definitions for expert explanations"""
+    try:
+        from langchain.document_loaders import PyPDFLoader
+        from langchain.text_splitter import RecursiveCharacterTextSplitter
+        
+        print(f"[DEBUG] Starting to process: {glossary_path}")
+        
+        # Check if file exists first
+        if not os.path.exists(glossary_path):
+            print(f"[ERROR] File does not exist: {glossary_path}")
+            return []
+        
+        # Check file size
+        file_size = os.path.getsize(glossary_path)
+        print(f"[DEBUG] File size: {file_size} bytes")
+        
+        if file_size == 0:
+            print(f"[ERROR] File is empty: {glossary_path}")
+            return []
+        
+        # Load the glossary PDF
+        loader = PyPDFLoader(glossary_path)
+        print("[DEBUG] PyPDFLoader created")
+        
+        documents = loader.load()
+        print(f"[DEBUG] PDF loaded: {len(documents)} pages")
+        
+        if not documents:
+            print("[ERROR] No documents loaded from PDF")
+            return []
+        
+        # Print first page content for debugging
+        if len(documents) > 0:
+            first_page = documents[0].page_content[:200]
+            print(f"[DEBUG] First page preview: {first_page}...")
+        
+        # Split into smaller chunks for better term matching
+        text_splitter = RecursiveCharacterTextSplitter(
+            chunk_size=800,  # Smaller chunks for definitions
+            chunk_overlap=100,
+            length_function=len,
+            separators=["\n\n", "\n", ". ", " ", ""]
+        )
+        
+        chunks = text_splitter.split_documents(documents)
+        print(f"[DEBUG] Created {len(chunks)} chunks")
+        
+        # Add metadata to identify this as glossary content
+        for i, chunk in enumerate(chunks):
+            chunk.metadata['source_type'] = 'insurance_glossary'
+            chunk.metadata['source_file'] = glossary_path
+            chunk.metadata['content_purpose'] = 'term_definitions'
+            chunk.metadata['chunk_id'] = i
+        
+        print(f"[SUCCESS] Processing complete: {len(chunks)} chunks ready")
+        return chunks
+        
+    except Exception as e:
+        print(f"[ERROR] Exception in get_insurance_glossary_chunks: {str(e)}")
+        print(f"[ERROR] Exception type: {type(e).__name__}")
+        import traceback
+        print(f"[ERROR] Full traceback: {traceback.format_exc()}")
+        return []
+
+
