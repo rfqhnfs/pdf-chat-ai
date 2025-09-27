@@ -23,10 +23,10 @@ except (KeyError, FileNotFoundError):
     st.info("Please add GEMINI_API in app settings → Secrets")
     st.stop()
 
-# SMART GLOSSARY INTEGRATION (No external dependencies)
+# SMART GLOSSARY INTEGRATION (Fixed with PyPDF2)
 @st.cache_resource
 def load_insurance_glossary_smart():
-    """Load and process insurance glossary using pure Python"""
+    """Load and process insurance glossary using PyPDF2"""
     
     # Show current working directory for debugging
     current_dir = os.getcwd()
@@ -51,11 +51,12 @@ def load_insurance_glossary_smart():
     st.success(f"✅ **Found**: `{glossary_path}` (Size: {file_size} bytes)")
     
     try:
-        # Process glossary using pure Python
-        glossary_text = functions.extract_glossary_text(glossary_path)
+        # Process glossary using PyPDF2
+        glossary_text = functions.extract_glossary_text_pypdf2(glossary_path)
         
         if glossary_text:
             st.success(f"✅ **Glossary processed successfully** - {len(glossary_text)} characters extracted")
+            st.write(f"📄 **Sample glossary content**: {glossary_text[:200]}...")
             return glossary_text
         else:
             st.warning("⚠️ **Failed to extract glossary text**")
@@ -135,7 +136,7 @@ st.markdown("<h1 class='main-header'>📄 Insurance Claims AI Assistant</h1>", u
 if glossary_text:
     st.markdown(f"""
     <div class="smart-indicator">
-        🧠 **Smart Expert System Active** - AI will intelligently combine your claim document with insurance glossary definitions
+        🧠 **Smart Expert System Active** - AI will intelligently combine your claim document with insurance glossary definitions ({len(glossary_text)} characters loaded)
     </div>
     """, unsafe_allow_html=True)
 
@@ -179,9 +180,9 @@ if uploaded_file is not None and check_file_size(uploaded_file):
                     with open("temp.pdf", "wb") as f:
                         f.write(uploaded_file.getbuffer())
             
-                    # Create smart system
+                    # Create smart system using LangChain
                     if glossary_text:
-                        ss.rag_chain = functions.create_smart_claim_system(
+                        ss.rag_chain = functions.create_smart_claim_system_langchain(
                             "temp.pdf", 
                             glossary_text, 
                             api_key_gemini
