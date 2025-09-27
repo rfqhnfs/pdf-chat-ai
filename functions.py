@@ -6,13 +6,38 @@ import os
 
 def process_pdf_from_file(file_path, api_key):
     """
-    Pure Python PDF processing - no dependencies except PyPDF2 and google.generativeai
-    100% compatible with Streamlit Cloud
+    Process PDF using google-generativeai 0.7.2 - optimized for your exact setup
     """
     try:
-        # Configure Gemini
+        # Configure Gemini with your version
         genai.configure(api_key=api_key)
-        model = genai.GenerativeModel('gemini-pro')  # Using stable model name
+        
+        # Try different model names for your version
+        model_names = [
+            "gemini-pro",
+            "models/gemini-pro", 
+            "gemini-1.5-flash",
+            "models/gemini-1.5-flash"
+        ]
+        
+        model = None
+        working_model_name = None
+        
+        # Find working model
+        for model_name in model_names:
+            try:
+                model = genai.GenerativeModel(model_name)
+                # Test the model with a simple prompt
+                test_response = model.generate_content("Hello")
+                working_model_name = model_name
+                print(f"[SUCCESS] Working model found: {model_name}")
+                break
+            except Exception as e:
+                print(f"[DEBUG] Model {model_name} failed: {str(e)}")
+                continue
+        
+        if not model:
+            raise Exception("No working model found for your google-generativeai version")
         
         # Extract text from PDF using PyPDF2
         pdf_text = ""
@@ -28,12 +53,13 @@ def process_pdf_from_file(file_path, api_key):
         pdf_text = re.sub(r'\u200b', '', pdf_text).strip()
         
         # Limit text for memory efficiency
-        if len(pdf_text) > 15000:
-            pdf_text = pdf_text[:15000]
+        if len(pdf_text) > 12000:
+            pdf_text = pdf_text[:12000]
+        
+        print(f"[DEBUG] Using model: {working_model_name} | PDF text length: {len(pdf_text)}")
         
         def answer_question(question):
-            prompt = f"""
-You are an AI assistant that answers questions based on document content.
+            prompt = f"""You are an AI assistant that answers questions based on document content.
 
 Document Content:
 {pdf_text}
@@ -58,22 +84,22 @@ Answer:"""
         gc.collect()
         
         # Return chain-like object
-        class PurePythonRAG:
+        class OptimizedRAG:
             def invoke(self, input_dict):
                 return answer_question(input_dict["input"])
         
-        return PurePythonRAG()
+        return OptimizedRAG()
         
     except Exception as e:
         gc.collect()
         raise Exception(f"PDF processing failed: {str(e)}")
 
-def extract_glossary_text_pure(glossary_path):
-    """Extract text from insurance glossary PDF using pure PyPDF2"""
+def extract_glossary_text(glossary_path):
+    """Extract text from insurance glossary PDF using PyPDF2"""
     try:
-        print(f"[DEBUG] Pure Python - Extracting glossary text: {glossary_path}")
+        print(f"[DEBUG] Extracting glossary text: {glossary_path}")
         
-        # Check if file exists first
+        # Check if file exists
         if not os.path.exists(glossary_path):
             print(f"[ERROR] File does not exist: {glossary_path}")
             return None
@@ -98,23 +124,48 @@ def extract_glossary_text_pure(glossary_path):
         glossary_text = re.sub(r'[\n\xa0\s]+', ' ', glossary_text).strip()
         glossary_text = re.sub(r'\u200b', '', glossary_text).strip()
         
-        print(f"[SUCCESS] Pure Python - Total glossary text extracted: {len(glossary_text)} characters")
+        print(f"[SUCCESS] Total glossary text extracted: {len(glossary_text)} characters")
         return glossary_text
         
     except Exception as e:
-        print(f"[ERROR] Exception in extract_glossary_text_pure: {str(e)}")
+        print(f"[ERROR] Exception in extract_glossary_text: {str(e)}")
         import traceback
         print(f"[ERROR] Full traceback: {traceback.format_exc()}")
         return None
 
-def create_pure_python_expert_system(user_pdf_path, glossary_text, api_key):
-    """Create expert system using only PyPDF2 + Google Generative AI - zero external dependencies"""
+def create_expert_claim_system(user_pdf_path, glossary_text, api_key):
+    """Create expert system that combines claim document with glossary"""
     try:
-        print(f"[DEBUG] Creating pure Python expert system")
+        print(f"[DEBUG] Creating expert claim system")
         
         # Configure Gemini
         genai.configure(api_key=api_key)
-        model = genai.GenerativeModel('gemini-pro')  # Using stable model name
+        
+        # Find working model (same logic as above)
+        model_names = [
+            "gemini-pro",
+            "models/gemini-pro", 
+            "gemini-1.5-flash",
+            "models/gemini-1.5-flash"
+        ]
+        
+        model = None
+        working_model_name = None
+        
+        for model_name in model_names:
+            try:
+                model = genai.GenerativeModel(model_name)
+                # Test the model
+                test_response = model.generate_content("Hello")
+                working_model_name = model_name
+                print(f"[SUCCESS] Expert system using model: {model_name}")
+                break
+            except Exception as e:
+                print(f"[DEBUG] Model {model_name} failed: {str(e)}")
+                continue
+        
+        if not model:
+            raise Exception("No working model found for expert system")
         
         # Extract text from user's claim document using PyPDF2
         user_text = ""
@@ -137,10 +188,10 @@ def create_pure_python_expert_system(user_pdf_path, glossary_text, api_key):
         if len(glossary_text) > 5000:
             glossary_text = glossary_text[:5000]
         
-        print(f"[DEBUG] Pure Python - Content lengths - User claim: {len(user_text)} chars, Glossary: {len(glossary_text)} chars")
+        print(f"[DEBUG] Expert system content - User claim: {len(user_text)} chars, Glossary: {len(glossary_text)} chars")
         
-        def pure_python_expert_answer(question):
-            """Use both user document and glossary to provide expert answers - pure Python"""
+        def expert_answer(question):
+            """Provide expert answers using both user document and glossary"""
             
             # Create enhanced prompt that uses both documents
             prompt = f"""You are an expert insurance advisor helping customers understand their insurance claims.
@@ -167,23 +218,23 @@ Your answer should:
 Example format for "What is my ACV?":
 "Your ACV is $X,XXX [from claim document]. ACV stands for Actual Cash Value, which means [definition from glossary in simple terms]..."
 
-Pure Python Expert Answer:"""
+Expert Answer:"""
             
             try:
                 response = model.generate_content(prompt)
                 return {"answer": response.text}
             except Exception as e:
-                return {"answer": f"Error generating pure Python expert response: {str(e)}"}
+                return {"answer": f"Error generating expert response: {str(e)}"}
         
-        # Return expert system (pure Python implementation)
-        class PurePythonExpertRAG:
+        # Return expert system
+        class ExpertClaimRAG:
             def invoke(self, input_dict):
-                return pure_python_expert_answer(input_dict["input"])
+                return expert_answer(input_dict["input"])
         
         gc.collect()  # Clean up memory
-        return PurePythonExpertRAG()
+        return ExpertClaimRAG()
         
     except Exception as e:
-        print(f"[ERROR] Error in create_pure_python_expert_system: {str(e)}")
+        print(f"[ERROR] Error in create_expert_claim_system: {str(e)}")
         # Fallback to regular processing
         return process_pdf_from_file(user_pdf_path, api_key)
