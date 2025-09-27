@@ -9,7 +9,7 @@ def process_pdf_from_file(file_path, api_key):
     try:
         # Configure Gemini with the best model from your list
         genai.configure(api_key=api_key)
-        model = genai.GenerativeModel('models/gemini-2.5-flash')  # Using the latest stable model
+        model = genai.GenerativeModel('gemini-2.5-flash')  # Using the latest stable model
         
         # Extract text from PDF using PyPDF2
         pdf_text = ""
@@ -105,7 +105,7 @@ def create_expert_claim_system(user_pdf_path, glossary_text, api_key):
         
         # Configure with best model
         genai.configure(api_key=api_key)
-        model = genai.GenerativeModel('models/gemini-2.5-flash')
+        model = genai.GenerativeModel('gemini-2.5-flash')
         
         # Extract user text
         user_text = ""
@@ -171,3 +171,4 @@ Expert Answer:"""
     except Exception as e:
         print(f"[ERROR] Error in create_expert_claim_system: {str(e)}")
         return process_pdf_from_file(user_pdf_path, api_key)
+
