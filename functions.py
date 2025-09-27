@@ -4,40 +4,67 @@ import re
 import gc
 import os
 
-def process_pdf_from_file(file_path, api_key):
-    """
-    Process PDF using google-generativeai 0.7.2 - optimized for your exact setup
-    """
+def get_available_models(api_key):
+    """Get list of available models for this API key"""
     try:
-        # Configure Gemini with your version
         genai.configure(api_key=api_key)
+        available_models = []
         
-        # Try different model names for your version
-        model_names = [
-            "gemini-pro",
-            "models/gemini-pro", 
-            "gemini-1.5-flash",
-            "models/gemini-1.5-flash"
-        ]
+        print("[DEBUG] Checking available models...")
+        for model in genai.list_models():
+            model_name = model.name
+            print(f"[DEBUG] Found model: {model_name}")
+            if 'generateContent' in getattr(model, 'supported_generation_methods', []):
+                available_models.append(model_name)
+                print(f"[DEBUG] ✅ Model {model_name} supports generateContent")
+            else:
+                print(f"[DEBUG] ❌ Model {model_name} does not support generateContent")
         
-        model = None
-        working_model_name = None
+        print(f"[SUCCESS] Available models with generateContent: {available_models}")
+        return available_models
+    except Exception as e:
+        print(f"[ERROR] Failed to list models: {str(e)}")
+        return []
+
+def get_working_model(api_key):
+    """Find the first working model"""
+    try:
+        available_models = get_available_models(api_key)
         
-        # Find working model
-        for model_name in model_names:
+        if not available_models:
+            print("[ERROR] No models found!")
+            return None
+        
+        # Try each available model
+        for model_name in available_models:
             try:
                 model = genai.GenerativeModel(model_name)
-                # Test the model with a simple prompt
+                # Test with simple prompt
                 test_response = model.generate_content("Hello")
-                working_model_name = model_name
                 print(f"[SUCCESS] Working model found: {model_name}")
-                break
+                return model, model_name
             except Exception as e:
-                print(f"[DEBUG] Model {model_name} failed: {str(e)}")
+                print(f"[DEBUG] Model {model_name} test failed: {str(e)}")
                 continue
         
+        print("[ERROR] No working model found!")
+        return None, None
+        
+    except Exception as e:
+        print(f"[ERROR] Error finding working model: {str(e)}")
+        return None, None
+
+def process_pdf_from_file(file_path, api_key):
+    """
+    Process PDF with automatic model detection
+    """
+    try:
+        # Configure and find working model
+        genai.configure(api_key=api_key)
+        model, model_name = get_working_model(api_key)
+        
         if not model:
-            raise Exception("No working model found for your google-generativeai version")
+            raise Exception("No working model found for your API key")
         
         # Extract text from PDF using PyPDF2
         pdf_text = ""
@@ -56,7 +83,7 @@ def process_pdf_from_file(file_path, api_key):
         if len(pdf_text) > 12000:
             pdf_text = pdf_text[:12000]
         
-        print(f"[DEBUG] Using model: {working_model_name} | PDF text length: {len(pdf_text)}")
+        print(f"[DEBUG] Using model: {model_name} | PDF text length: {len(pdf_text)}")
         
         def answer_question(question):
             prompt = f"""You are an AI assistant that answers questions based on document content.
@@ -84,11 +111,11 @@ Answer:"""
         gc.collect()
         
         # Return chain-like object
-        class OptimizedRAG:
+        class AutoDetectedRAG:
             def invoke(self, input_dict):
                 return answer_question(input_dict["input"])
         
-        return OptimizedRAG()
+        return AutoDetectedRAG()
         
     except Exception as e:
         gc.collect()
@@ -134,35 +161,13 @@ def extract_glossary_text(glossary_path):
         return None
 
 def create_expert_claim_system(user_pdf_path, glossary_text, api_key):
-    """Create expert system that combines claim document with glossary"""
+    """Create expert system with automatic model detection"""
     try:
-        print(f"[DEBUG] Creating expert claim system")
+        print(f"[DEBUG] Creating expert claim system with auto-detection")
         
-        # Configure Gemini
+        # Configure and find working model
         genai.configure(api_key=api_key)
-        
-        # Find working model (same logic as above)
-        model_names = [
-            "gemini-pro",
-            "models/gemini-pro", 
-            "gemini-1.5-flash",
-            "models/gemini-1.5-flash"
-        ]
-        
-        model = None
-        working_model_name = None
-        
-        for model_name in model_names:
-            try:
-                model = genai.GenerativeModel(model_name)
-                # Test the model
-                test_response = model.generate_content("Hello")
-                working_model_name = model_name
-                print(f"[SUCCESS] Expert system using model: {model_name}")
-                break
-            except Exception as e:
-                print(f"[DEBUG] Model {model_name} failed: {str(e)}")
-                continue
+        model, model_name = get_working_model(api_key)
         
         if not model:
             raise Exception("No working model found for expert system")
@@ -188,12 +193,12 @@ def create_expert_claim_system(user_pdf_path, glossary_text, api_key):
         if len(glossary_text) > 5000:
             glossary_text = glossary_text[:5000]
         
-        print(f"[DEBUG] Expert system content - User claim: {len(user_text)} chars, Glossary: {len(glossary_text)} chars")
+        print(f"[DEBUG] Expert system using model: {model_name}")
+        print(f"[DEBUG] Content - User claim: {len(user_text)} chars, Glossary: {len(glossary_text)} chars")
         
         def expert_answer(question):
             """Provide expert answers using both user document and glossary"""
             
-            # Create enhanced prompt that uses both documents
             prompt = f"""You are an expert insurance advisor helping customers understand their insurance claims.
 
 USER'S INSURANCE CLAIM DOCUMENT:
@@ -227,12 +232,12 @@ Expert Answer:"""
                 return {"answer": f"Error generating expert response: {str(e)}"}
         
         # Return expert system
-        class ExpertClaimRAG:
+        class AutoDetectedExpertRAG:
             def invoke(self, input_dict):
                 return expert_answer(input_dict["input"])
         
         gc.collect()  # Clean up memory
-        return ExpertClaimRAG()
+        return AutoDetectedExpertRAG()
         
     except Exception as e:
         print(f"[ERROR] Error in create_expert_claim_system: {str(e)}")
