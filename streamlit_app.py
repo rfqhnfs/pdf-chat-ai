@@ -23,6 +23,30 @@ except (KeyError, FileNotFoundError):
     st.info("Please add GEMINI_API in app settings → Secrets")
     st.stop()
 
+# KNOWLEDGE BASE INTEGRATION - Add this section
+@st.cache_resource
+def load_knowledge_base():
+    """Load and cache your additional PDF knowledge base"""
+    knowledge_base_path = "knowledge_base.pdf"  # ← Your additional PDF goes here
+    
+    if not os.path.exists(knowledge_base_path):
+        st.warning(f"⚠️ Knowledge base file not found: {knowledge_base_path}")
+        return None, []
+    
+    try:
+        # Extract the processed chunks for later combination
+        knowledge_chunks = functions.get_pdf_chunks(knowledge_base_path)
+        
+        st.success(f"✅ Knowledge base loaded: {knowledge_base_path}")
+        return None, knowledge_chunks
+    
+    except Exception as e:
+        st.error(f"❌ Error loading knowledge base: {str(e)}")
+        return None, []
+
+# Load knowledge base once (cached)
+knowledge_rag_chain, knowledge_chunks = load_knowledge_base()
+
 # Minimal CSS
 st.markdown("""
 <style>
@@ -64,10 +88,26 @@ st.markdown("""
         border-left: 3px solid #28a745;
     }
     .block-container {padding-top: 1rem !important;}
+    .knowledge-indicator {
+        background-color: #e8f5e8;
+        border-left: 3px solid #28a745;
+        padding: 0.5rem;
+        margin: 0.5rem 0;
+        border-radius: 4px;
+        font-size: 0.85rem;
+    }
 </style>
 """, unsafe_allow_html=True)
 
 st.markdown("<h1 class='main-header'>📄 PDF Chat AI</h1>", unsafe_allow_html=True)
+
+# Show knowledge base status
+if knowledge_chunks:
+    st.markdown(f"""
+    <div class="knowledge-indicator">
+        🧠 Enhanced with knowledge base ({len(knowledge_chunks)} additional knowledge chunks loaded)
+    </div>
+    """, unsafe_allow_html=True)
 
 # Initialize session state
 if 'rag_chain' not in ss:
@@ -101,21 +141,34 @@ if uploaded_file is not None and check_file_size(uploaded_file):
     container_pdf, container_chat = st.columns([0.45, 0.55], gap='small')
     
     with container_pdf:
-        # Process PDF once
+        # Process PDF once - NOW WITH KNOWLEDGE BASE INTEGRATION
         if ss.rag_chain is None:
-            with st.spinner("Processing PDF..."):
+            with st.spinner("Processing PDF with knowledge base..."):
                 try:
                     # Save and process file
                     with open("temp.pdf", "wb") as f:
                         f.write(uploaded_file.getbuffer())
             
-                    ss.rag_chain = functions.process_pdf_from_file("temp.pdf", api_key_gemini)
+                    # ENHANCED: Process with knowledge base integration
+                    if knowledge_chunks:
+                        ss.rag_chain = functions.process_pdf_with_knowledge_base(
+                            "temp.pdf", 
+                            knowledge_chunks, 
+                            api_key_gemini
+                        )
+                    else:
+                        # Fallback to original processing if no knowledge base
+                        ss.rag_chain = functions.process_pdf_from_file("temp.pdf", api_key_gemini)
+                    
                     ss.pdf_data = uploaded_file.getbuffer()
                     
                     if os.path.exists("temp.pdf"):
                         os.remove("temp.pdf")
                         
-                    st.success("✅ PDF processed successfully!")
+                    if knowledge_chunks:
+                        st.success("✅ PDF processed with knowledge base enhancement!")
+                    else:
+                        st.success("✅ PDF processed successfully!")
                         
                 except Exception as e:
                     st.error(f"❌ Error: {str(e)}")
@@ -170,7 +223,7 @@ Format your answer clearly with labels for each value."""
                     # Clean text
                     def clean_text(text):
                         text = re.sub(r'\*+', '', text)
-                        text = re.sub(r'\\[\$]', '$', text)
+                        text = re.sub(r'\[\$\]', '$', text)
                         text = re.sub(r'[#_`]', '', text)
                         text = re.sub(r'\s+', ' ', text)
                         return text.strip()
@@ -248,6 +301,10 @@ Format your answer clearly with labels for each value."""
                             {cleaned_answer}
                         </div>
                         """, unsafe_allow_html=True)
+                        
+                        # Show knowledge enhancement indicator
+                        if knowledge_chunks:
+                            st.caption("🧠 Answer enhanced with additional knowledge base")
                         
                         try:
                             tc = TokenCount()
