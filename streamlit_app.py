@@ -23,10 +23,10 @@ except (KeyError, FileNotFoundError):
     st.info("Please add GEMINI_API in app settings → Secrets")
     st.stop()
 
-# SMART GLOSSARY INTEGRATION (Pure Python)
+# INSURANCE GLOSSARY INTEGRATION
 @st.cache_resource
-def load_insurance_glossary_smart():
-    """Load and process insurance glossary using pure Python"""
+def load_insurance_glossary():
+    """Load and cache insurance glossary PDF"""
     
     # Show current working directory for debugging
     current_dir = os.getcwd()
@@ -51,8 +51,8 @@ def load_insurance_glossary_smart():
     st.success(f"✅ **Found**: `{glossary_path}` (Size: {file_size} bytes)")
     
     try:
-        # Process glossary using pure Python
-        glossary_text = functions.extract_glossary_text_pure(glossary_path)
+        # Process glossary
+        glossary_text = functions.extract_glossary_text(glossary_path)
         
         if glossary_text:
             st.success(f"✅ **Glossary processed successfully** - {len(glossary_text)} characters extracted")
@@ -67,8 +67,8 @@ def load_insurance_glossary_smart():
         return None
 
 # Load insurance glossary
-st.markdown("## 🔧 Pure Python System Initialization")
-glossary_text = load_insurance_glossary_smart()
+st.markdown("## 🔧 System Initialization")
+glossary_text = load_insurance_glossary()
 
 # Enhanced CSS
 st.markdown("""
@@ -111,7 +111,7 @@ st.markdown("""
         border-left: 3px solid #28a745;
     }
     .block-container {padding-top: 1rem !important;}
-    .pure-indicator {
+    .expert-indicator {
         background: linear-gradient(145deg, #e8f5e8, #d4edda);
         border-left: 4px solid #28a745;
         padding: 0.8rem;
@@ -132,11 +132,11 @@ st.markdown("""
 st.markdown("---")
 st.markdown("<h1 class='main-header'>📄 Insurance Claims AI Assistant</h1>", unsafe_allow_html=True)
 
-# Show pure Python system status
+# Show expert system status
 if glossary_text:
     st.markdown(f"""
-    <div class="pure-indicator">
-        🧠 **Pure Python Expert System Active** - AI will intelligently combine your claim document with insurance glossary definitions ({len(glossary_text)} characters loaded) - Zero external dependencies!
+    <div class="expert-indicator">
+        🧠 **Expert System Active** - AI will combine your claim document with comprehensive insurance terminology definitions ({len(glossary_text)} characters loaded)
     </div>
     """, unsafe_allow_html=True)
 
@@ -172,22 +172,22 @@ if uploaded_file is not None and check_file_size(uploaded_file):
     container_pdf, container_chat = st.columns([0.45, 0.55], gap='small')
     
     with container_pdf:
-        # Process PDF with Pure Python Expert System
+        # Process PDF with Expert System
         if ss.rag_chain is None:
-            with st.spinner("Creating pure Python expert system from your claim..."):
+            with st.spinner("Creating expert insurance system from your claim..."):
                 try:
                     # Save and process file
                     with open("temp.pdf", "wb") as f:
                         f.write(uploaded_file.getbuffer())
             
-                    # Create pure Python system
+                    # Create expert system
                     if glossary_text:
-                        ss.rag_chain = functions.create_pure_python_expert_system(
+                        ss.rag_chain = functions.create_expert_claim_system(
                             "temp.pdf", 
                             glossary_text, 
                             api_key_gemini
                         )
-                        success_msg = "✅ Pure Python expert system created! AI can now provide detailed explanations."
+                        success_msg = "✅ Expert insurance system created! AI can now provide detailed explanations."
                     else:
                         # Fallback to original processing
                         ss.rag_chain = functions.process_pdf_from_file("temp.pdf", api_key_gemini)
@@ -234,11 +234,11 @@ if uploaded_file is not None and check_file_size(uploaded_file):
                     st.info("📄 Claim document ready for analysis")
         
     with container_chat:
-        # Auto-extraction with pure Python processing
-        st.markdown('<p class="section-title">🔍 Key Information Extraction</p>', unsafe_allow_html=True)
+        # Auto-extraction with expert explanations
+        st.markdown('<p class="section-title">🔍 Expert Information Extraction</p>', unsafe_allow_html=True)
         
         if ss.auto_extraction_results is None and ss.rag_chain is not None:
-            # Enhanced extraction question
+            # Enhanced extraction question with explanations
             extraction_question = """Please extract and explain the following information from this insurance claim:
 
 1. RCV (Replacement Cost Value) - What is the RCV amount and what does RCV mean?
@@ -247,7 +247,7 @@ if uploaded_file is not None and check_file_size(uploaded_file):
 
 For each item, provide both the specific amount from the document AND a clear explanation of what the term means."""
             
-            with st.spinner("Using pure Python system to extract and explain key information..."):
+            with st.spinner("Using expert system to extract and explain key information..."):
                 try:
                     result = ss.rag_chain.invoke({"input": extraction_question})
                     combined_answer = result['answer']
@@ -260,7 +260,7 @@ For each item, provide both the specific amount from the document AND a clear ex
                         text = re.sub(r'\s+', ' ', text)
                         return text.strip()
                     
-                    # Enhanced parsing
+                    # Enhanced parsing for explanations
                     lines = combined_answer.split('\n')
                     rcv_answer = "Not found in document"
                     acv_answer = "Not found in document" 
@@ -334,12 +334,12 @@ For each item, provide both the specific amount from the document AND a clear ex
                     
                 except Exception as e:
                     ss.auto_extraction_results = [
-                        ("💰 RCV", "Pure Python extraction failed - try asking specific questions", "#e3f2fd"),
-                        ("💵 ACV", "Pure Python extraction failed - try asking specific questions", "#f3e5f5"),
-                        ("📉 Depreciation", "Pure Python extraction failed - try asking specific questions", "#fff3e0")
+                        ("💰 RCV", "Expert extraction failed - try asking specific questions", "#e3f2fd"),
+                        ("💵 ACV", "Expert extraction failed - try asking specific questions", "#f3e5f5"),
+                        ("📉 Depreciation", "Expert extraction failed - try asking specific questions", "#fff3e0")
                     ]
         
-        # Display results
+        # Display enhanced results
         if ss.auto_extraction_results:
             for i, (label, answer, bg_color) in enumerate(ss.auto_extraction_results):
                 st.markdown(f"""
@@ -349,11 +349,11 @@ For each item, provide both the specific amount from the document AND a clear ex
                 </div>
                 """, unsafe_allow_html=True)
         
-        # Q&A section with pure Python system
+        # Q&A section with expert system
         st.markdown('<p class="section-title">💬 Ask Your Insurance Questions</p>', unsafe_allow_html=True)
         
         if glossary_text:
-            st.info("🧠 **Pure Python Expert Mode**: AI has access to comprehensive insurance terminology definitions!")
+            st.info("🧠 **Expert Mode**: Ask about any insurance terms for detailed explanations!")
         
         if ss.rag_chain is not None:
             with st.form(key="question_form", clear_on_submit=True):
@@ -361,7 +361,7 @@ For each item, provide both the specific amount from the document AND a clear ex
                 ask_button = st.form_submit_button("🚀 Ask Expert", type="primary")
             
             if ask_button and user_message.strip():
-                with st.spinner("Pure Python expert system analyzing your question..."):
+                with st.spinner("Expert system analyzing your question..."):
                     try:
                         result = ss.rag_chain.invoke({"input": user_message})
                         
@@ -373,16 +373,16 @@ For each item, provide both the specific amount from the document AND a clear ex
                         
                         cleaned_answer = clean_answer(result['answer'])
                         
-                        st.markdown("**Pure Python Expert Answer:**")
+                        st.markdown("**Expert Answer:**")
                         st.markdown(f"""
                         <div class="expert-answer">
                             {cleaned_answer}
                         </div>
                         """, unsafe_allow_html=True)
                         
-                        # Show pure Python system indicator
+                        # Show expert enhancement indicator
                         if glossary_text:
-                            st.caption("🧠 Answer enhanced with insurance terminology expertise (Pure Python)")
+                            st.caption("🧠 Answer enhanced with professional insurance terminology explanations")
                         
                         try:
                             tc = TokenCount()
@@ -409,7 +409,7 @@ For each item, provide both the specific amount from the document AND a clear ex
                             "What is my deductible amount and what does deductible mean in insurance?"
                         ]
                         
-                        with st.spinner("Pure Python analysis in progress..."):
+                        with st.spinner("Getting expert explanation..."):
                             try:
                                 result = ss.rag_chain.invoke({"input": full_questions[i]})
                                 
@@ -450,8 +450,8 @@ elif uploaded_file is None:
     st.markdown("""
     <div style="text-align: center; padding: 1.5rem;">
         <h3>👋 Upload Your Insurance Claim Document</h3>
-        <p>Get expert explanations combining your claim with insurance terminology</p>
+        <p>Get expert explanations of insurance terms and amounts</p>
         <p><strong>📏 Maximum file size: 5MB</strong></p>
-        <p style="font-size: 0.9rem; color: #666;">🧠 Powered by pure Python expert system</p>
+        <p style="font-size: 0.9rem; color: #666;">🧠 The AI will explain insurance terms in simple language</p>
     </div>
     """, unsafe_allow_html=True)
